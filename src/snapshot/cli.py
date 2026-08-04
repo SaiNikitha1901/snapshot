@@ -4,7 +4,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from . import blob, index, objects, tree
+from . import blob, commit, index, objects, refs, tree
 from .repository import SNAPSHOT_DIR_NAME, init_repository
 
 
@@ -73,6 +73,22 @@ def cmd_cat_file(args: argparse.Namespace) -> None:
     print(f"type: {obj_type}")
     print(f"size: {len(content)} bytes")
     print("content:")
+
+    if obj_type == "commit":
+        try:
+            parsed_commit = commit.decode_commit(content)
+        except ValueError as exc:
+            print(f"<malformed commit: {exc}>")
+            return
+        print(f"tree {parsed_commit.tree}")
+        if parsed_commit.parent is not None:
+            print(f"parent {parsed_commit.parent}")
+        print(f"author {parsed_commit.author}")
+        print(f"committer {parsed_commit.committer}")
+        print()
+        print(parsed_commit.message)
+        return
+
     try:
         print(content.decode())
     except UnicodeDecodeError:
@@ -159,6 +175,89 @@ def cmd_ls_tree(args: argparse.Namespace) -> None:
         print(f"{display_mode} {tree.entry_type(entry.mode)} {entry.oid} {entry.name}")
 
 
+def cmd_commit(args: argparse.Namespace) -> None:
+    snapshot_dir = find_snapshot_dir()
+    objects_dir = snapshot_dir / "objects"
+    index_path = snapshot_dir / "index"
+
+    entries = index.read_index(index_path)
+    if not entries:
+        print(
+            "fatal: nothing to commit (index is empty); "
+            "use 'snapshot add' to stage changes first",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    tree_oid = tree.write_tree_from_index(objects_dir, entries)
+
+    try:
+        branch_ref_path = refs.current_branch_ref_path(snapshot_dir)
+    except ValueError as exc:
+        print(f"fatal: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    parent_oid = refs.read_branch_oid(branch_ref_path)
+
+    new_commit = commit.build_commit(tree_oid, parent_oid, args.message)
+    commit_oid = commit.store_commit(objects_dir, new_commit)
+
+    refs.update_branch_ref(branch_ref_path, commit_oid)
+
+    print(commit_oid)
+
+
+def cmd_log(args: argparse.Namespace) -> None:
+    snapshot_dir = find_snapshot_dir()
+    objects_dir = snapshot_dir / "objects"
+
+    try:
+        current_oid = refs.resolve_head(snapshot_dir)
+    except ValueError as exc:
+        print(f"fatal: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    if current_oid is None:
+        print("fatal: no commits yet", file=sys.stderr)
+        sys.exit(1)
+
+    while current_oid is not None:
+        try:
+            current_commit = commit.read_commit(objects_dir, current_oid)
+        except (FileNotFoundError, ValueError) as exc:
+            print(f"fatal: {exc}", file=sys.stderr)
+            sys.exit(1)
+
+        print(f"commit {current_oid}")
+        print(f"Author: {current_commit.author}")
+        print()
+        for line in current_commit.message.splitlines() or [""]:
+            print(f"    {line}")
+        print()
+
+        current_oid = current_commit.parent
+
+
+def cmd_rev_parse(args: argparse.Namespace) -> None:
+    if args.ref != "HEAD":
+        print(f"fatal: only 'HEAD' is supported, got '{args.ref}'", file=sys.stderr)
+        sys.exit(1)
+
+    snapshot_dir = find_snapshot_dir()
+
+    try:
+        oid = refs.resolve_head(snapshot_dir)
+    except ValueError as exc:
+        print(f"fatal: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    if oid is None:
+        print("fatal: HEAD does not point to any commit yet (no commits made)", file=sys.stderr)
+        sys.exit(1)
+
+    print(oid)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="snapshot", description="Educational Git internals explorer"
@@ -199,6 +298,21 @@ def main() -> None:
     ls_tree_parser = subparsers.add_parser("ls-tree", help="List the entries of a tree object")
     ls_tree_parser.add_argument("oid", help="The tree object's OID")
     ls_tree_parser.set_defaults(func=cmd_ls_tree)
+
+    commit_parser = subparsers.add_parser(
+        "commit", help="Create a commit from the currently staged index"
+    )
+    commit_parser.add_argument("-m", "--message", required=True, help="Commit message")
+    commit_parser.set_defaults(func=cmd_commit)
+
+    log_parser = subparsers.add_parser("log", help="Show commit history starting from HEAD")
+    log_parser.set_defaults(func=cmd_log)
+
+    rev_parse_parser = subparsers.add_parser(
+        "rev-parse", help="Resolve a ref to a commit OID"
+    )
+    rev_parse_parser.add_argument("ref", help="Only 'HEAD' is currently supported")
+    rev_parse_parser.set_defaults(func=cmd_rev_parse)
 
     args = parser.parse_args()
     args.func(args)
