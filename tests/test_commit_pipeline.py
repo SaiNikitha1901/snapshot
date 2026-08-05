@@ -7,16 +7,19 @@ from snapshot import commit, index, objects, refs, repository, tree
 
 def _commit_staged(objects_dir, snapshot_dir, entries, message, timestamp):
     """Mimic cmd_commit's pipeline: write tree, resolve parent, build+store
-    commit, update the branch ref. Returns the new commit OID.
+    commit, advance HEAD. Returns the new commit OID.
+
+    Uses refs.update_head (Build #4) rather than manually reading/writing
+    the branch ref, so this helper works correctly whether HEAD is
+    symbolic or detached -- exactly like the real `snapshot commit`.
     """
     tree_oid = tree.write_tree_from_index(objects_dir, entries)
-    branch_ref_path = refs.current_branch_ref_path(snapshot_dir)
-    parent_oid = refs.read_branch_oid(branch_ref_path)
+    parent_oid = refs.resolve_head(snapshot_dir)
 
     new_commit = commit.build_commit(tree_oid, parent_oid, message, timestamp=timestamp)
     commit_oid = commit.store_commit(objects_dir, new_commit)
 
-    refs.update_branch_ref(branch_ref_path, commit_oid)
+    refs.update_head(snapshot_dir, commit_oid)
     return commit_oid
 
 
@@ -136,3 +139,53 @@ def test_unrelated_unchanged_blob_reused_across_commits(tmp_path):
     _commit_staged(objects_dir, snapshot_dir, entries_v2, "second", 1700001800)
 
     assert blob_path.stat().st_mtime_ns == mtime_before  # never rewritten
+
+
+# --- Build #4: committing while detached ---
+
+
+def test_commit_while_detached_does_not_move_branch(tmp_path):
+    snapshot_dir = repository.init_repository(tmp_path)
+    objects_dir = snapshot_dir / "objects"
+
+    blob1 = objects.write_object(objects_dir, "blob", b"v1")
+    entries_v1 = [index.IndexEntry(path="a.txt", mode="100644", oid=blob1)]
+    first_oid = _commit_staged(objects_dir, snapshot_dir, entries_v1, "first", 1700400000)
+
+    main_ref_path = snapshot_dir / "refs" / "heads" / "main"
+    assert refs.read_branch_oid(main_ref_path) == first_oid
+
+    # Detach onto the commit that already exists.
+    refs.set_detached_head(snapshot_dir, first_oid)
+    assert refs.is_detached(snapshot_dir)
+
+    # Commit again while detached, using the same pipeline `snapshot commit` uses.
+    blob2 = objects.write_object(objects_dir, "blob", b"v2 detached")
+    entries_v2 = [index.IndexEntry(path="a.txt", mode="100644", oid=blob2)]
+    detached_oid = _commit_staged(objects_dir, snapshot_dir, entries_v2, "detached commit", 1700400100)
+
+    # HEAD moved to the new detached commit...
+    assert refs.resolve_head(snapshot_dir) == detached_oid
+    assert refs.is_detached(snapshot_dir)
+    assert refs.read_head(snapshot_dir) == detached_oid  # HEAD itself holds the new OID
+
+    # ...but main's ref file is completely untouched.
+    assert refs.read_branch_oid(main_ref_path) == first_oid
+
+
+def test_detached_commit_still_links_to_its_parent(tmp_path):
+    snapshot_dir = repository.init_repository(tmp_path)
+    objects_dir = snapshot_dir / "objects"
+
+    blob1 = objects.write_object(objects_dir, "blob", b"v1")
+    entries_v1 = [index.IndexEntry(path="a.txt", mode="100644", oid=blob1)]
+    first_oid = _commit_staged(objects_dir, snapshot_dir, entries_v1, "first", 1700400200)
+
+    refs.set_detached_head(snapshot_dir, first_oid)
+
+    blob2 = objects.write_object(objects_dir, "blob", b"v2")
+    entries_v2 = [index.IndexEntry(path="a.txt", mode="100644", oid=blob2)]
+    detached_oid = _commit_staged(objects_dir, snapshot_dir, entries_v2, "detached", 1700400300)
+
+    detached_commit = commit.read_commit(objects_dir, detached_oid)
+    assert detached_commit.parent == first_oid

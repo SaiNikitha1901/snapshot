@@ -4,7 +4,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from . import blob, commit, index, objects, refs, tree
+from . import blob, checkout, commit, index, objects, refs, tree
 from .repository import SNAPSHOT_DIR_NAME, init_repository
 
 
@@ -192,19 +192,20 @@ def cmd_commit(args: argparse.Namespace) -> None:
     tree_oid = tree.write_tree_from_index(objects_dir, entries)
 
     try:
-        branch_ref_path = refs.current_branch_ref_path(snapshot_dir)
+        parent_oid = refs.resolve_head(snapshot_dir)
     except ValueError as exc:
         print(f"fatal: {exc}", file=sys.stderr)
         sys.exit(1)
 
-    parent_oid = refs.read_branch_oid(branch_ref_path)
-
     new_commit = commit.build_commit(tree_oid, parent_oid, args.message)
     commit_oid = commit.store_commit(objects_dir, new_commit)
 
-    refs.update_branch_ref(branch_ref_path, commit_oid)
+    detached = refs.is_detached(snapshot_dir)
+    refs.update_head(snapshot_dir, commit_oid)
 
     print(commit_oid)
+    if detached:
+        print("Note: you are in 'detached HEAD' state; no branch was moved by this commit.")
 
 
 def cmd_log(args: argparse.Namespace) -> None:
@@ -256,6 +257,63 @@ def cmd_rev_parse(args: argparse.Namespace) -> None:
         sys.exit(1)
 
     print(oid)
+
+
+def cmd_branch(args: argparse.Namespace) -> None:
+    snapshot_dir = find_snapshot_dir()
+
+    if args.name is None:
+        _print_branch_list(snapshot_dir)
+        return
+
+    try:
+        refs.create_branch(snapshot_dir, args.name)
+    except ValueError as exc:
+        print(f"fatal: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    print(f"Created branch '{args.name}'")
+
+
+def _print_branch_list(snapshot_dir: Path) -> None:
+    branch_names = refs.list_branches(snapshot_dir)
+    detached = refs.is_detached(snapshot_dir)
+    current_branch = None if detached else refs.current_branch_name(snapshot_dir)
+
+    if detached:
+        print(f"* (HEAD detached at {refs.resolve_head(snapshot_dir)})")
+
+    if not branch_names:
+        if not detached:
+            print("(no branches yet)")
+        return
+
+    for name in branch_names:
+        marker = "*" if name == current_branch else " "
+        print(f"{marker} {name}")
+
+
+def cmd_checkout(args: argparse.Namespace) -> None:
+    snapshot_dir = find_snapshot_dir()
+    objects_dir = snapshot_dir / "objects"
+    index_path = snapshot_dir / "index"
+    repo_root = Path.cwd()
+
+    target = args.target
+
+    try:
+        if refs.branch_exists(snapshot_dir, target):
+            checkout.checkout_branch(snapshot_dir, objects_dir, index_path, repo_root, target)
+            print(f"Switched to branch '{target}'")
+        else:
+            commit_oid = checkout.checkout_commit(
+                snapshot_dir, objects_dir, index_path, repo_root, target
+            )
+            print(f"Note: checking out '{target}'.")
+            print(f"HEAD is now detached at {commit_oid}")
+    except ValueError as exc:
+        print(f"fatal: {exc}", file=sys.stderr)
+        sys.exit(1)
 
 
 def main() -> None:
@@ -313,6 +371,20 @@ def main() -> None:
     )
     rev_parse_parser.add_argument("ref", help="Only 'HEAD' is currently supported")
     rev_parse_parser.set_defaults(func=cmd_rev_parse)
+
+    branch_parser = subparsers.add_parser(
+        "branch", help="List branches, or create a new one pointing at HEAD"
+    )
+    branch_parser.add_argument(
+        "name", nargs="?", help="Name of the new branch to create; omit to list branches"
+    )
+    branch_parser.set_defaults(func=cmd_branch)
+
+    checkout_parser = subparsers.add_parser(
+        "checkout", help="Switch to a branch, or detach HEAD onto a specific commit"
+    )
+    checkout_parser.add_argument("target", help="Branch name or commit OID to check out")
+    checkout_parser.set_defaults(func=cmd_checkout)
 
     args = parser.parse_args()
     args.func(args)

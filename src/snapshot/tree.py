@@ -152,3 +152,25 @@ def write_tree_from_index(objects_dir: Path, index_entries: list[IndexEntry]) ->
 
     root_node = _group_entries_by_path(index_entries)
     return _write_tree_node(objects_dir, root_node)
+
+
+def flatten_tree_to_entries(objects_dir: Path, tree_oid: str, path_prefix: str = "") -> list[IndexEntry]:
+    """Recursively walk a tree object and flatten it back into a list of
+    (path, mode, oid) entries -- the exact inverse of the grouping step
+    inside write_tree_from_index.
+
+    Used by checkout (Build #4) to figure out what the working
+    directory and index should look like for a given commit, without
+    ever creating new objects -- this function only reads.
+    """
+    _, payload = objects.read_object(objects_dir, tree_oid)
+    entries = decode_tree_payload(payload)
+
+    flattened: list[IndexEntry] = []
+    for entry in entries:
+        full_path = f"{path_prefix}/{entry.name}" if path_prefix else entry.name
+        if entry_type(entry.mode) == "tree":
+            flattened.extend(flatten_tree_to_entries(objects_dir, entry.oid, full_path))
+        else:
+            flattened.append(IndexEntry(path=full_path, mode=entry.mode, oid=entry.oid))
+    return flattened
