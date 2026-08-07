@@ -4,7 +4,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from . import blob, checkout, commit, index, objects, refs, tree
+from . import blob, checkout, commit, index, merge, objects, refs, tree
 from .repository import SNAPSHOT_DIR_NAME, init_repository
 
 
@@ -83,6 +83,8 @@ def cmd_cat_file(args: argparse.Namespace) -> None:
         print(f"tree {parsed_commit.tree}")
         if parsed_commit.parent is not None:
             print(f"parent {parsed_commit.parent}")
+        if parsed_commit.merge_parent is not None:
+            print(f"parent {parsed_commit.merge_parent}")
         print(f"author {parsed_commit.author}")
         print(f"committer {parsed_commit.committer}")
         print()
@@ -316,6 +318,40 @@ def cmd_checkout(args: argparse.Namespace) -> None:
         sys.exit(1)
 
 
+def cmd_merge(args: argparse.Namespace) -> None:
+    snapshot_dir = find_snapshot_dir()
+    objects_dir = snapshot_dir / "objects"
+    index_path = snapshot_dir / "index"
+    repo_root = Path.cwd()
+
+    try:
+        result = merge.merge_branch(snapshot_dir, objects_dir, index_path, repo_root, args.branch)
+    except ValueError as exc:
+        print(f"fatal: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    if result.kind == "already_up_to_date":
+        print("Already up to date.")
+    elif result.kind == "fast_forward":
+        print(f"Fast-forward merge: branch now at {result.commit_oid}")
+    elif result.kind == "merge_commit":
+        print(f"Merge commit created: {result.commit_oid}")
+    elif result.kind == "conflict":
+        print("Auto-merging failed with conflicts in:", file=sys.stderr)
+        for path in result.conflicted_paths:
+            print(f"  both modified: {path}", file=sys.stderr)
+        print(file=sys.stderr)
+        print(
+            "Snapshot (like Git) will not guess how to combine these "
+            "overlapping edits. Conflict markers have been written into "
+            "the file(s) above -- edit them by hand to keep what you "
+            "want, remove the <<<<<<<, =======, and >>>>>>> marker "
+            "lines, then 'snapshot add' and 'snapshot commit' to finish.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="snapshot", description="Educational Git internals explorer"
@@ -385,6 +421,12 @@ def main() -> None:
     )
     checkout_parser.add_argument("target", help="Branch name or commit OID to check out")
     checkout_parser.set_defaults(func=cmd_checkout)
+
+    merge_parser = subparsers.add_parser(
+        "merge", help="Merge a branch into the current branch"
+    )
+    merge_parser.add_argument("branch", help="Name of the branch to merge into the current branch")
+    merge_parser.set_defaults(func=cmd_merge)
 
     args = parser.parse_args()
     args.func(args)

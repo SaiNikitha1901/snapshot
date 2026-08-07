@@ -16,6 +16,7 @@ header is added) -- plain text, matching Git closely:
 
     tree <tree_oid>
     parent <parent_oid>          # omitted entirely for the first commit
+    parent <merge_parent_oid>    # present ONLY for merge commits (Build #5)
     author <name> <email> <timestamp>
     committer <name> <email> <timestamp>
 
@@ -25,6 +26,15 @@ Simplification: real Git also writes a timezone offset after the
 timestamp (e.g. "+0000") and reads author/committer identity from user
 configuration (git config user.name / user.email). Snapshot hardcodes
 a single static identity and omits the timezone.
+
+Build #5 note on `merge_parent`: a merge commit is an ORDINARY commit
+whose only difference is a second parent line. Rather than generalize
+`parent` into a list (which would ripple into every existing caller --
+`cmd_log`, `cmd_commit`, every earlier test -- for a capability only
+merge commits need), Snapshot adds one new, optional field. This keeps
+Build #1-4 code and tests completely unchanged, and it makes "a merge
+commit is a normal commit plus one extra field" literally true in the
+data model, not just true in prose.
 """
 
 import time
@@ -41,11 +51,12 @@ AUTHOR_EMAIL = "snapshot@example.com"
 class Commit:
     """A parsed commit: what it points at, who made it, and why."""
 
-    tree: str               # 40-char hex OID of the root tree
-    parent: str | None      # 40-char hex OID of the parent commit, or None for the first commit
-    author: str             # "<name> <email> <timestamp>"
-    committer: str          # same shape as author; always identical to it in Snapshot
+    tree: str                    # 40-char hex OID of the root tree
+    parent: str | None           # 40-char hex OID of the (first) parent, or None for the first commit
+    author: str                  # "<name> <email> <timestamp>"
+    committer: str               # same shape as author; always identical to it in Snapshot
     message: str
+    merge_parent: str | None = None  # second parent; set ONLY on merge commits (Build #5)
 
 
 def _format_identity(timestamp: int) -> str:
@@ -54,17 +65,31 @@ def _format_identity(timestamp: int) -> str:
 
 
 def build_commit(
-    tree_oid: str, parent_oid: str | None, message: str, timestamp: int | None = None
+    tree_oid: str,
+    parent_oid: str | None,
+    message: str,
+    timestamp: int | None = None,
+    merge_parent_oid: str | None = None,
 ) -> Commit:
     """Construct a new Commit with Snapshot's static author/committer identity.
 
     `timestamp` defaults to the current time; accepting it explicitly
     keeps this function deterministic and easy to test.
+
+    `merge_parent_oid` should only be passed when constructing a merge
+    commit; every ordinary commit leaves it as None.
     """
     if timestamp is None:
         timestamp = int(time.time())
     identity = _format_identity(timestamp)
-    return Commit(tree=tree_oid, parent=parent_oid, author=identity, committer=identity, message=message)
+    return Commit(
+        tree=tree_oid,
+        parent=parent_oid,
+        author=identity,
+        committer=identity,
+        message=message,
+        merge_parent=merge_parent_oid,
+    )
 
 
 def encode_commit(commit: Commit) -> bytes:
@@ -72,6 +97,8 @@ def encode_commit(commit: Commit) -> bytes:
     lines = [f"tree {commit.tree}"]
     if commit.parent is not None:
         lines.append(f"parent {commit.parent}")
+    if commit.merge_parent is not None:
+        lines.append(f"parent {commit.merge_parent}")
     lines.append(f"author {commit.author}")
     lines.append(f"committer {commit.committer}")
     header = "\n".join(lines)
@@ -81,10 +108,16 @@ def encode_commit(commit: Commit) -> bytes:
 def decode_commit(payload: bytes) -> Commit:
     """Decode a commit object's payload bytes back into a Commit.
 
+    A commit may contain zero, one, or two "parent" header lines (zero
+    for the first commit ever made, one for an ordinary commit, two for
+    a merge commit). More than two would mean an octopus merge, which
+    Snapshot doesn't support.
+
     Raises:
         ValueError: the payload is malformed -- missing the blank line
             separating headers from the message, missing a required
-            header, or containing an unrecognized header line.
+            header, containing an unrecognized header line, or
+            containing more than two parent lines.
     """
     text = payload.decode()
     if "\n\n" not in text:
@@ -93,7 +126,7 @@ def decode_commit(payload: bytes) -> Commit:
     header_text, message = text.split("\n\n", 1)
 
     tree_oid = None
-    parent_oid = None
+    parent_oids: list[str] = []
     author = None
     committer = None
 
@@ -106,7 +139,7 @@ def decode_commit(payload: bytes) -> Commit:
         if key == "tree":
             tree_oid = value
         elif key == "parent":
-            parent_oid = value
+            parent_oids.append(value)
         elif key == "author":
             author = value
         elif key == "committer":
@@ -120,8 +153,18 @@ def decode_commit(payload: bytes) -> Commit:
         raise ValueError("malformed commit: missing required 'author' header")
     if committer is None:
         raise ValueError("malformed commit: missing required 'committer' header")
+    if len(parent_oids) > 2:
+        raise ValueError(
+            "malformed commit: more than two parent lines (octopus merges are not supported)"
+        )
 
-    return Commit(tree=tree_oid, parent=parent_oid, author=author, committer=committer, message=message)
+    parent = parent_oids[0] if len(parent_oids) >= 1 else None
+    merge_parent = parent_oids[1] if len(parent_oids) >= 2 else None
+
+    return Commit(
+        tree=tree_oid, parent=parent, author=author, committer=committer,
+        message=message, merge_parent=merge_parent,
+    )
 
 
 def store_commit(objects_dir: Path, commit: Commit) -> str:

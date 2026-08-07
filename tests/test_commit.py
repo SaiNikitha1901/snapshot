@@ -102,3 +102,50 @@ def test_read_commit_rejects_non_commit_object(tmp_path):
 
     with pytest.raises(ValueError):
         commit.read_commit(objects_dir, blob_oid)
+
+
+# --- Build #5: merge commits (second parent) ---
+
+
+def test_regular_commit_has_no_merge_parent():
+    c = commit.build_commit("t" * 40, None, "Initial", timestamp=1700600000)
+    assert c.merge_parent is None
+
+
+def test_build_commit_with_merge_parent():
+    c = commit.build_commit(
+        "t" * 40, "p" * 40, "Merge x into y", timestamp=1700600100, merge_parent_oid="q" * 40
+    )
+    assert c.parent == "p" * 40
+    assert c.merge_parent == "q" * 40
+
+
+def test_encode_commit_includes_both_parent_lines_for_merge_commit():
+    c = commit.build_commit(
+        "t" * 40, "p" * 40, "Merge", timestamp=1700600200, merge_parent_oid="q" * 40
+    )
+    text = commit.encode_commit(c).decode()
+    assert f"parent {'p' * 40}" in text
+    assert f"parent {'q' * 40}" in text
+    assert text.count("parent ") == 2
+
+
+def test_merge_commit_round_trips():
+    original = commit.build_commit(
+        "t" * 40, "p" * 40, "Merge", timestamp=1700600300, merge_parent_oid="q" * 40
+    )
+    decoded = commit.decode_commit(commit.encode_commit(original))
+    assert decoded == original
+    assert decoded.merge_parent == "q" * 40
+
+
+def test_decode_commit_rejects_more_than_two_parents():
+    payload = (
+        b"tree " + b"t" * 40 + b"\n"
+        b"parent " + b"1" * 40 + b"\n"
+        b"parent " + b"2" * 40 + b"\n"
+        b"parent " + b"3" * 40 + b"\n"
+        b"author a\ncommitter a\n\nmsg"
+    )
+    with pytest.raises(ValueError):
+        commit.decode_commit(payload)

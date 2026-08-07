@@ -77,7 +77,7 @@ def _ensure_safe_to_checkout(
         )
 
 
-def _restore_to_commit(objects_dir: Path, index_path: Path, repo_root: Path, commit_oid: str) -> None:
+def restore_to_commit(objects_dir: Path, index_path: Path, repo_root: Path, commit_oid: str) -> None:
     """Overwrite the working directory and index to match commit_oid's tree.
 
     Only reads existing objects -- never creates new ones. Files that
@@ -90,6 +90,11 @@ def _restore_to_commit(objects_dir: Path, index_path: Path, repo_root: Path, com
     file is removed are not cleaned up. They're a harmless leftover,
     not a correctness issue -- Snapshot doesn't track directories as
     first-class entities, only tree objects do.
+
+    Public (Build #5): merge.py reuses this exact function for the
+    final "sync working directory + index to the result" step after a
+    successful fast-forward or three-way merge, instead of
+    reimplementing restoration logic.
     """
     commit_obj = commit.read_commit(objects_dir, commit_oid)
     target_entries = tree.flatten_tree_to_entries(objects_dir, commit_obj.tree)
@@ -135,7 +140,7 @@ def checkout_branch(
     _ensure_safe_to_checkout(objects_dir, index_path, repo_root, current_commit_oid)
 
     target_commit_oid = refs.read_branch_oid(snapshot_dir / "refs" / "heads" / branch_name)
-    _restore_to_commit(objects_dir, index_path, repo_root, target_commit_oid)
+    restore_to_commit(objects_dir, index_path, repo_root, target_commit_oid)
     refs.set_symbolic_head(snapshot_dir, branch_name)
 
     return target_commit_oid
@@ -170,7 +175,7 @@ def checkout_commit(
     current_commit_oid = refs.resolve_head(snapshot_dir)
     _ensure_safe_to_checkout(objects_dir, index_path, repo_root, current_commit_oid)
 
-    _restore_to_commit(objects_dir, index_path, repo_root, commit_oid)
+    restore_to_commit(objects_dir, index_path, repo_root, commit_oid)
     refs.set_detached_head(snapshot_dir, commit_oid)
 
     return commit_oid
