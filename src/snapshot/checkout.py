@@ -138,12 +138,27 @@ def checkout_branch(
 
     current_commit_oid = refs.resolve_head(snapshot_dir)
     _ensure_safe_to_checkout(objects_dir, index_path, repo_root, current_commit_oid)
+    from_label = _checkout_from_label(snapshot_dir, current_commit_oid)
 
     target_commit_oid = refs.read_branch_oid(snapshot_dir / "refs" / "heads" / branch_name)
     restore_to_commit(objects_dir, index_path, repo_root, target_commit_oid)
-    refs.set_symbolic_head(snapshot_dir, branch_name)
+    refs.set_symbolic_head(
+        snapshot_dir, branch_name, reflog_message=f"checkout: moving from {from_label} to {branch_name}"
+    )
 
     return target_commit_oid
+
+
+def _checkout_from_label(snapshot_dir: Path, current_commit_oid: str | None) -> str:
+    """A short, human-readable label for "where HEAD was" before a
+    checkout, for the reflog message -- a branch name if HEAD was
+    symbolic, a short commit OID if detached."""
+    if refs.is_detached(snapshot_dir):
+        return current_commit_oid[:7] if current_commit_oid else "unborn"
+    try:
+        return refs.current_branch_name(snapshot_dir)
+    except ValueError:
+        return "unborn"
 
 
 def checkout_commit(
@@ -174,8 +189,11 @@ def checkout_commit(
 
     current_commit_oid = refs.resolve_head(snapshot_dir)
     _ensure_safe_to_checkout(objects_dir, index_path, repo_root, current_commit_oid)
+    from_label = _checkout_from_label(snapshot_dir, current_commit_oid)
 
     restore_to_commit(objects_dir, index_path, repo_root, commit_oid)
-    refs.set_detached_head(snapshot_dir, commit_oid)
+    refs.set_detached_head(
+        snapshot_dir, commit_oid, reflog_message=f"checkout: moving from {from_label} to {commit_oid[:7]}"
+    )
 
     return commit_oid

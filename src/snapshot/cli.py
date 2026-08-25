@@ -4,7 +4,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from . import blob, checkout, commit, index, merge, objects, refs, tree
+from . import blob, checkout, commit, index, merge, objects, reflog, refs, tree
 from .repository import SNAPSHOT_DIR_NAME, init_repository
 
 
@@ -203,7 +203,8 @@ def cmd_commit(args: argparse.Namespace) -> None:
     commit_oid = commit.store_commit(objects_dir, new_commit)
 
     detached = refs.is_detached(snapshot_dir)
-    refs.update_head(snapshot_dir, commit_oid)
+    reflog_prefix = "commit (initial)" if parent_oid is None else "commit"
+    refs.update_head(snapshot_dir, commit_oid, reflog_message=f"{reflog_prefix}: {args.message}")
 
     print(commit_oid)
     if detached:
@@ -239,6 +240,18 @@ def cmd_log(args: argparse.Namespace) -> None:
         print()
 
         current_oid = current_commit.parent
+
+
+def cmd_reflog(args: argparse.Namespace) -> None:
+    snapshot_dir = find_snapshot_dir()
+    entries = list(reversed(reflog.read_entries(snapshot_dir)))
+
+    if not entries:
+        print("(reflog is empty)")
+        return
+
+    for i, entry in enumerate(entries):
+        print(f"{entry.new_oid[:7]} HEAD@{{{i}}}: {entry.message}")
 
 
 def cmd_rev_parse(args: argparse.Namespace) -> None:
@@ -401,6 +414,11 @@ def main() -> None:
 
     log_parser = subparsers.add_parser("log", help="Show commit history starting from HEAD")
     log_parser.set_defaults(func=cmd_log)
+
+    reflog_parser = subparsers.add_parser(
+        "reflog", help="Show every commit HEAD has pointed at, newest first"
+    )
+    reflog_parser.set_defaults(func=cmd_reflog)
 
     rev_parse_parser = subparsers.add_parser(
         "rev-parse", help="Resolve a ref to a commit OID"

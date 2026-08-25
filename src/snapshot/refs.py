@@ -130,30 +130,48 @@ def update_branch_ref(ref_path: Path, commit_oid: str) -> None:
     ref_path.write_text(commit_oid + "\n")
 
 
-def update_head(snapshot_dir: Path, commit_oid: str) -> None:
+def update_head(snapshot_dir: Path, commit_oid: str, *, reflog_message: str | None = None) -> None:
     """Advance HEAD to point at a new commit, after a successful commit.
 
     If HEAD is symbolic (on a branch), this updates that branch's ref
     file; HEAD itself, and every other branch, is left untouched. If
     HEAD is detached, this overwrites HEAD directly with the new OID
     -- no branch moves. This is the one place "which thing moves when
-    you commit" is decided.
+    you commit" is decided -- and, since every HEAD-moving operation
+    (commit, merge) ends up calling this, the one place a reflog entry
+    is recorded for all of them. `reflog_message` is optional so
+    existing callers that only care about pointer mechanics (chiefly
+    tests) are unaffected; real callers pass a real message.
     """
+    old_oid = resolve_head(snapshot_dir)
     if is_detached(snapshot_dir):
         (snapshot_dir / "HEAD").write_text(commit_oid + "\n")
     else:
         branch_ref_path = current_branch_ref_path(snapshot_dir)
         update_branch_ref(branch_ref_path, commit_oid)
+    _record_reflog(snapshot_dir, old_oid, commit_oid, reflog_message)
 
 
-def set_symbolic_head(snapshot_dir: Path, branch_name: str) -> None:
+def set_symbolic_head(snapshot_dir: Path, branch_name: str, *, reflog_message: str | None = None) -> None:
     """Point HEAD at a branch by name (used by `checkout <branch>`)."""
+    old_oid = resolve_head(snapshot_dir)
     (snapshot_dir / "HEAD").write_text(f"{HEAD_PREFIX}refs/heads/{branch_name}\n")
+    new_oid = read_branch_oid(snapshot_dir / "refs" / "heads" / branch_name)
+    if new_oid is not None:
+        _record_reflog(snapshot_dir, old_oid, new_oid, reflog_message)
 
 
-def set_detached_head(snapshot_dir: Path, commit_oid: str) -> None:
+def set_detached_head(snapshot_dir: Path, commit_oid: str, *, reflog_message: str | None = None) -> None:
     """Point HEAD directly at a commit OID (used by `checkout <commit_oid>`)."""
+    old_oid = resolve_head(snapshot_dir)
     (snapshot_dir / "HEAD").write_text(commit_oid + "\n")
+    _record_reflog(snapshot_dir, old_oid, commit_oid, reflog_message)
+
+
+def _record_reflog(snapshot_dir: Path, old_oid: str | None, new_oid: str, message: str | None) -> None:
+    from . import reflog as reflog_mod  # local import: reflog.py never needs to import refs.py, this keeps it that way
+
+    reflog_mod.append_entry(snapshot_dir, old_oid, new_oid, message or f"updated HEAD to {new_oid[:7]}")
 
 
 def list_branches(snapshot_dir: Path) -> list[str]:

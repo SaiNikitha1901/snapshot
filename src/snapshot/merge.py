@@ -479,7 +479,7 @@ def merge_branch(
         # Fast-forward: current is strictly behind target. Only the
         # branch pointer moves -- no tree, no commit, no new object of
         # any kind is created.
-        refs.update_head(snapshot_dir, target_oid)
+        refs.update_head(snapshot_dir, target_oid, reflog_message=f"merge {target_branch_name}: Fast-forward")
         checkout.restore_to_commit(objects_dir, index_path, repo_root, target_oid)
         return MergeResult(kind="fast_forward", commit_oid=target_oid)
 
@@ -506,7 +506,7 @@ def merge_branch(
     )
     merge_commit_oid = commit.store_commit(objects_dir, merge_commit)
 
-    refs.update_head(snapshot_dir, merge_commit_oid)
+    refs.update_head(snapshot_dir, merge_commit_oid, reflog_message=f"merge {target_branch_name}: merge commit")
     checkout.restore_to_commit(objects_dir, index_path, repo_root, merge_commit_oid)
 
     return MergeResult(kind="merge_commit", commit_oid=merge_commit_oid)
