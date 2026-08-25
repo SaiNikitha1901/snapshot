@@ -1,0 +1,31 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    ports:
+      - '8000:8000'
+    environment:
+      SNAPSHOT_REPO_ROOT: /data/workspace
+      SNAPSHOT_CORS_ORIGINS: http://localhost:5173
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
+    volumes:
+      - snapshot-workspace:/data/workspace
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        VITE_API_BASE_URL: http://localhost:8000
+    ports:
+      - '5173:5173'
+    depends_on:
+      - backend
+
+volumes:
+  # Single shared workspace, persisted across container restarts --
+  # matches the product's single-shared-repository design (see the
+  # implementation plan's "Session model" decision).
+  snapshot-workspace:
