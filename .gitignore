@@ -4,6 +4,9 @@
 __pycache__/
 *.pyc
 
+# Snapshot Studio's default local workspace (backend/app/core/config.py)
+workspace/
+
 # Temporary files from manual experiments
 hello.txt
 copy.txt
