@@ -1,0 +1,50 @@
+/**
+ * Snapshot Studio design tokens, wired into Tailwind v4's `@theme` so
+ * they become real utilities (bg-accent, text-fg-muted, font-mono, ...).
+ *
+ * Visual identity: familiar to Git users, not imitative of any
+ * existing Git client. One restrained, git-inspired orange accent
+ * reserved for HEAD / current branch / active animation step /
+ * selection -- everywhere else stays neutral so animations are what
+ * draws the eye. Calm, focused, engineering-tool-first; no
+ * glassmorphism, gradients, or playful motion.
+ */
+
+@theme {
+  --font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+
+  /* Neutral surfaces -- most of the interface lives here. */
+  --color-canvas: #0d0f12;
+  --color-surface: #15181c;
+  --color-surface-raised: #1c2025;
+  --color-border: #262b31;
+  --color-border-strong: #383f47;
+
+  /* Text */
+  --color-fg: #e6e8eb;
+  --color-fg-muted: #9aa1ab;
+  --color-fg-subtle: #6b7280;
+
+  /* The one accent: HEAD, current branch, active animation step, selection. */
+  --color-accent: #d97a3d;
+  --color-accent-soft: #d97a3d26;
+  --color-accent-fg: #1a0f08;
+
+  /* Working-directory / index / conflict semantics. */
+  --color-success: #4caf7d;
+  --color-success-soft: #4caf7d1f;
+  --color-warning: #d9b23d;
+  --color-warning-soft: #d9b23d1f;
+  --color-danger: #d9564a;
+  --color-danger-soft: #d9564a1f;
+
+  /* Secondary (non-current) branches, cycled by lane. */
+  --color-branch-blue: #5b8dd9;
+  --color-branch-purple: #9b7bd9;
+  --color-branch-teal: #3fae9e;
+
+  --radius-sm: 0.25rem;
+  --radius-md: 0.4rem;
+  --radius-lg: 0.65rem;
+}

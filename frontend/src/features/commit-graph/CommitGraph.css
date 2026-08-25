@@ -1,0 +1,30 @@
+/* React Flow ships its own light-mode control styling by default --
+ * override it to match Snapshot's tokens instead of looking like a
+ * generic React Flow demo. */
+
+.react-flow__controls {
+  box-shadow: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.react-flow__controls-button {
+  background: var(--color-canvas);
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-fg-subtle);
+  transition: color 150ms ease;
+}
+
+.react-flow__controls-button:hover {
+  background: var(--color-surface-raised);
+  color: var(--color-accent);
+}
+
+.react-flow__controls-button svg {
+  fill: currentColor;
+}
+
+.react-flow__attribution {
+  display: none;
+}

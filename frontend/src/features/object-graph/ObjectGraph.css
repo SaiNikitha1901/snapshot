@@ -1,0 +1,16 @@
+/* React Flow's default edge label styling doesn't match Snapshot's
+ * tokens -- override it the same way CommitGraph.css already overrides
+ * the Controls. Edge labels here carry the tree-entry name (or "tree"
+ * for commit->tree), the one place this view says "here's the name
+ * that points at this object" -- deliberately on the edge, not the
+ * node (see object_graph.py's docstring on why). */
+
+.react-flow__edge-textbg {
+  fill: var(--color-canvas);
+}
+
+.react-flow__edge-text {
+  fill: var(--color-fg-subtle);
+  font-family: var(--font-mono);
+  font-size: 10px;
+}

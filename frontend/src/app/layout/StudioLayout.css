@@ -1,0 +1,73 @@
+/*
+ * Desktop-first fixed grid: same structure from a 13" laptop through
+ * 4K, panels resize proportionally via fr/clamp(), never rearrange.
+ * Below the supported floor, individual panels scroll internally --
+ * the page itself never scrolls horizontally.
+ *
+ * Hairline-divider trick: the grid container's own background *is*
+ * the divider color, each cell's background is the page canvas, and
+ * the gap between cells is exactly 1px -- so every seam between
+ * regions renders as a single subtle line, with no panel owning a
+ * border of its own. The whole thing reads as one workspace with
+ * subtle divisions, not a set of separate bordered cards.
+ */
+
+.snapshot-studio-shell {
+  display: flex;
+  flex-direction: column;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.snapshot-studio-layout {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  overflow: hidden;
+  background: var(--color-border);
+  gap: 1px;
+  grid-template-columns: minmax(0, 2fr) minmax(340px, 1fr);
+  grid-template-rows: minmax(0, 1fr) minmax(260px, 36%);
+  grid-template-areas:
+    'viz  side'
+    'term learn';
+}
+
+/*
+ * viz/term/learn each hold exactly one Panel. A plain block div's
+ * height is content-based even when its grid-item parent is stretched
+ * to the row's full height, so each is its own single-cell grid --
+ * grid's default stretch alignment (both axes) is what actually makes
+ * the Panel inside fill the whole cell.
+ */
+.snapshot-panel-viz,
+.snapshot-panel-term,
+.snapshot-panel-learn {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  background: var(--color-canvas);
+}
+
+.snapshot-panel-viz {
+  grid-area: viz;
+}
+
+.snapshot-panel-term {
+  grid-area: term;
+}
+
+.snapshot-panel-learn {
+  grid-area: learn;
+}
+
+.snapshot-panel-side {
+  grid-area: side;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  min-height: 0;
+  background: var(--color-border);
+}
