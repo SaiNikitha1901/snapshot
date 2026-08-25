@@ -2,224 +2,67 @@
 
 > **Watch Git Think.**
 
-Snapshot is an educational version control system built from scratch to help users understand Git internals.
+Snapshot is a Git implementation built from scratch to explain how Git actually works. Instead of memorizing commands, you can inspect the real objects, refs, and HEAD movements Snapshot creates as you use it — either from a CLI, or visually in **Snapshot Studio**, a web UI that shows the commit graph, the object graph, and the reflog live as you type commands.
 
-Instead of treating Git as a black box, Snapshot exposes the core data structures and workflows behind a version control system by implementing them from first principles.
+Snapshot is not a Git wrapper — every object store, hash, tree, commit, branch, merge, and reflog entry is implemented from first principles in Python.
 
-The goal is not to replace Git, but to build an accurate mental model of how Git works under the hood.
-
----
-## Motivation
-
-Git is one of the most widely used developer tools, yet many users learn it by memorizing commands without understanding what happens internally.
-
-Snapshot bridges this gap by implementing Git's core object model from scratch while intentionally keeping the implementation simple enough to inspect, explore, and understand.
----
-
-## Features
-
-### Object Storage
-
-- Content-addressable object storage
-- SHA-1 object identification
-- Blob objects
-- Tree objects
-
-### Repository Management
-
-- Repository initialization
-- Staging area (Index)
-- Working directory tracking
-- Object serialization
-
-### Commit System
-
-- Snapshot-based commits
-- Commit history traversal
-- Parent commit relationships
-- Immutable commit graph
-
-### Branching
-
-- Branch creation
-- Branch switching
-- Symbolic HEAD
-- Detached HEAD
-- Safe checkout
-
-### Merge
-
-- Fast-forward merge
-- Three-way merge
-- Merge commits with multiple parents
-- Merge base discovery
-- Merge conflict detection
-- Conflict markers
-
-### Testing
-
-- Comprehensive unit test suite covering all implemented features
-
----
-
-
-## Architecture
-
-```
-Working Directory
-        │
-        ▼
-   Staging Area (Index)
-        │
-        ▼
-      Blob Objects
-        │
-        ▼
-      Tree Objects
-        │
-        ▼
-     Commit Objects
-        │
-        ▼
- Branch References
-        │
-        ▼
-       HEAD
-```
-
-Snapshot stores every object using content-addressable storage. Commits reference trees, trees reference blobs and subtrees, and branches simply point to commits. The complete repository history is maintained through commit metadata.
-
----
-
-## Educational Philosophy
-
-Snapshot focuses on understanding Git's core concepts rather than reproducing every production feature.
-
-The implementation prioritizes:
-
-- Conceptual accuracy
-- Simplicity
-- Inspectable data structures
-- Clear repository state transitions
-
-Whenever Snapshot intentionally simplifies production Git behaviour, the educational interface planned for future releases will explain the difference and the reasoning behind it.
-
----
-
-## Intentional Simplifications
-
-Snapshot currently does not implement:
-
-- Remote repositories
-- Networking
-- Packfiles
-- Delta compression
-- Garbage collection
-- Rebase
-- Cherry-pick
-- Hooks
-- Tags
-- Sparse checkout
-- Worktrees
-
-These omissions are intentional. They allow the project to focus on Git's object model and repository mechanics without introducing production optimizations that are not essential for understanding the underlying concepts.
-
----
-
-## Project Structure
-```
-src/
-└── snapshot/
-    ├── blob.py
-    ├── tree.py
-    ├── commit.py
-    ├── index.py
-    ├── refs.py
-    ├── checkout.py
-    ├── merge.py
-    ├── objects.py
-    ├── repository.py
-    └── cli.py
-
-tests/
-└── Unit tests for each core module
-```
-
-
----
-
-## Running the Project
-
-Initialize a repository
+## Quick start
 
 ```bash
+docker compose up --build
+```
+
+Open **http://localhost:5173**. The backend runs on :8000, and a Docker volume persists your repository across restarts. No API key is required — `GEMINI_API_KEY=your-key docker compose up --build` enables richer, AI-generated explanations in the Learn panel, but everything works without one.
+
+## What's included
+
+**The engine** (`src/snapshot/`) — a real content-addressable object store (SHA-1, blobs, trees, commits), branches, checkout (including detached HEAD), three-way merge with conflict detection, and an append-only reflog, all reachable through a `snapshot` CLI:
+
+```bash
+pip install -e .
 snapshot init
-```
-
-Stage files
-
-```bash
 snapshot add .
-```
-
-Create a commit
-
-```bash
-snapshot commit -m "Initial commit"
-```
-
-Create a branch
-
-```bash
-snapshot branch feature
-```
-
-Switch branches
-
-```bash
-snapshot checkout feature
-```
-
-Merge branches
-
-```bash
+snapshot commit -m "first commit"
+snapshot branch feature && snapshot checkout feature
 snapshot merge feature
+snapshot log
+snapshot reflog
 ```
 
-#### These commands demonstrate the typical Snapshot workflow. Additional commands such as object inspection and history traversal are available through the CLI help.
----
+**Snapshot Studio** (`backend/` + `frontend/`) — a FastAPI backend wrapping the engine, and a React + TypeScript frontend that turns every command into a live commit graph, object graph, and reflog, plus panels for repository status, object inspection, and inline explanations of what Git just did internally and why.
 
-## Running Tests
+## Running without Docker
 
 ```bash
-pytest -v
+# backend
+pip install -r backend/requirements.txt
+cd backend && uvicorn app.main:app --reload
+
+# frontend, in a second terminal
+cd frontend && npm install && npm run dev
 ```
 
----
+Open http://localhost:5173 — Vite proxies `/api/*` to the backend on :8000.
 
-## Roadmap
+## Tests
 
-### Engine
+```bash
+pytest tests backend/tests -v   # engine + backend
+cd frontend && npm test         # frontend
+```
 
-- [x] Content-addressable object storage
-- [x] Blob objects
-- [x] Tree objects
-- [x] Commit objects
-- [x] Branches
-- [x] Checkout
-- [x] Merge
-- [x] Merge conflict detection
+## Project structure
 
-### Snapshot Studio
+```
+src/snapshot/     the engine: object storage, refs, checkout, merge, reflog, CLI
+tests/            engine unit tests
+backend/          FastAPI wrapper exposing the engine over HTTP
+frontend/         Snapshot Studio (React + TypeScript + React Flow)
+```
 
-- [ ] Interactive terminal
-- [ ] Commit graph visualization
-- [ ] Object animations
-- [ ] Repository status
-- [ ] Object inspector
-- [ ] Guided learning interface
+## Intentional simplifications
 
----
+Snapshot focuses on the object model and repository mechanics, not production performance or the full Git surface. It does not implement remotes, packfiles, delta compression, garbage collection, rebase, cherry-pick, hooks, tags, sparse checkout, or worktrees — and per-branch reflogs are simplified to a single HEAD reflog. Every simplification like this is called out in Studio's Learn panel where it's relevant, rather than hidden.
 
 ## License
 
