@@ -1,32 +1,27 @@
-# React + TypeScript + Vite
+# Snapshot Studio — frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+The React + TypeScript UI for [Snapshot](../README.md). See the root README for running the whole app.
 
-Currently, two official plugins are available:
-
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+npm install
+npm run dev      # http://localhost:5173, proxies /api/* to the backend on :8000
+npm test         # Vitest + Testing Library
+npm run lint     # oxlint
+npm run build    # type-check and production build to dist/
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+Set `SNAPSHOT_API_PROXY_TARGET` to point the dev proxy at a backend other than `http://localhost:8000`. For a static build, `VITE_API_BASE_URL` is baked in at build time instead (see `Dockerfile`).
+
+## Layout
+
+```
+src/
+├── api/          typed client for the FastAPI backend
+├── app/          App shell, router, and the studio layout
+├── features/     one folder per panel: terminal, commit-graph, object-graph,
+│                 object-animation, object-inspector, repository-status, reflog, learn
+├── pages/        the landing page
+├── state/        React contexts: repo state, selection, animation, learn, command lifecycle
+├── styles/       design tokens (Tailwind v4 @theme) and globals
+└── types/        TypeScript mirrors of the backend's response schemas
+```
