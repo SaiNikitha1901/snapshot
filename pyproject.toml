@@ -4,6 +4,9 @@ version = "0.1.0"
 description = "An educational Git internals explorer"
 requires-python = ">=3.12"
 
+[project.optional-dependencies]
+dev = ["pytest>=8", "httpx>=0.27"]
+
 [project.scripts]
 snapshot = "snapshot.cli:main"
 
@@ -16,3 +19,6 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "backend/tests"]

@@ -3,6 +3,7 @@
 .pytest_cache/
 __pycache__/
 *.pyc
+*.egg-info/
 
 # Snapshot Studio's default local workspace (backend/app/core/config.py)
 workspace/
