@@ -8,7 +8,7 @@ def test_build_commit_without_parent():
     assert c.tree == "t" * 40
     assert c.parent is None
     assert c.message == "Initial commit"
-    assert "1700000000" in c.author
+    assert c.author.endswith(" 1700000000 +0000")
     assert c.author == c.committer
 
 
@@ -55,8 +55,8 @@ def test_commit_author_and_committer_preserved():
 
 def test_decode_commit_missing_tree_header_raises():
     payload = (
-        b"author Snapshot User <snapshot@example.com> 1700000000\n"
-        b"committer Snapshot User <snapshot@example.com> 1700000000\n"
+        b"author Snapshot User <snapshot@example.com> 1700000000 +0000\n"
+        b"committer Snapshot User <snapshot@example.com> 1700000000 +0000\n"
         b"\nmsg"
     )
     with pytest.raises(ValueError):

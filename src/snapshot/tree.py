@@ -57,15 +57,14 @@ def encode_tree_entry(entry: TreeEntry) -> bytes:
 def encode_tree(entries: list[TreeEntry]) -> bytes:
     """Encode a list of tree entries into a tree object's payload bytes.
 
-    Entries are sorted by name for deterministic output.
-
-    Simplification: real Git compares names as if directory entries had
-    a trailing "/", which only changes ordering in the rare case where a
-    file and a directory share a name prefix (e.g. "lib" vs "lib.txt").
-    We use a plain alphabetical sort by name and don't replicate that
-    edge case.
+    Entries are sorted the way Git sorts them: by name, but comparing
+    directory entries as if their name had a trailing "/". This only
+    changes ordering when a file and a directory share a name prefix
+    (e.g. "lib.txt" sorts before the directory "lib", because "." < "/"),
+    but without it Snapshot's tree OIDs would diverge from Git's and
+    `git fsck` would reject the tree as unsorted.
     """
-    sorted_entries = sorted(entries, key=lambda e: e.name)
+    sorted_entries = sorted(entries, key=lambda e: e.name + "/" if e.mode == "40000" else e.name)
     return b"".join(encode_tree_entry(e) for e in sorted_entries)
 
 

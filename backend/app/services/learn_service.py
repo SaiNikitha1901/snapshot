@@ -232,9 +232,9 @@ def _template_first_commit(context: LearnGenerationContext) -> LearnCard:
             "following each commit's parent link backward from a branch tip."
         ),
         in_production_git=(
-            "Real Git also records a timezone offset alongside the timestamp and reads your "
-            "identity from `git config user.name`/`user.email`; Snapshot hardcodes a single "
-            "static author identity and omits the timezone."
+            "This commit object is byte-compatible with Git's -- real `git cat-file` can read it. "
+            "Real Git reads your identity from `git config user.name`/`user.email` and records "
+            "your local timezone; Snapshot hardcodes a single static author and always uses UTC."
         ),
         explore_next=[
             "Open this commit in the Object Inspector and follow tree → blob to see your file's exact stored bytes.",

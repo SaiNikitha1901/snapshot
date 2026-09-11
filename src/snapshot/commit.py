@@ -17,15 +17,19 @@ header is added) -- plain text, matching Git closely:
     tree <tree_oid>
     parent <parent_oid>          # omitted entirely for the first commit
     parent <merge_parent_oid>    # present ONLY for merge commits (Build #5)
-    author <name> <email> <timestamp>
-    committer <name> <email> <timestamp>
+    author <name> <email> <timestamp> <tz>
+    committer <name> <email> <timestamp> <tz>
 
     <message>
 
-Simplification: real Git also writes a timezone offset after the
-timestamp (e.g. "+0000") and reads author/committer identity from user
-configuration (git config user.name / user.email). Snapshot hardcodes
-a single static identity and omits the timezone.
+This is byte-compatible with Git: real `git cat-file` and
+`git fsck --strict` accept Snapshot's commit objects (see
+tests/test_git_compatibility.py).
+
+Simplification: real Git reads author/committer identity from user
+configuration (git config user.name / user.email) and records the
+local timezone offset. Snapshot hardcodes a single static identity and
+always writes UTC ("+0000").
 
 Build #5 note on `merge_parent`: a merge commit is an ORDINARY commit
 whose only difference is a second parent line. Rather than generalize
@@ -45,6 +49,7 @@ from . import objects
 
 AUTHOR_NAME = "Snapshot User"
 AUTHOR_EMAIL = "snapshot@example.com"
+TIMEZONE = "+0000"
 
 
 @dataclass
@@ -53,15 +58,15 @@ class Commit:
 
     tree: str                    # 40-char hex OID of the root tree
     parent: str | None           # 40-char hex OID of the (first) parent, or None for the first commit
-    author: str                  # "<name> <email> <timestamp>"
+    author: str                  # "<name> <email> <timestamp> <tz>"
     committer: str               # same shape as author; always identical to it in Snapshot
     message: str
     merge_parent: str | None = None  # second parent; set ONLY on merge commits (Build #5)
 
 
 def _format_identity(timestamp: int) -> str:
-    """Format Snapshot's static identity + a timestamp the way Git formats one: 'Name <email> timestamp'."""
-    return f"{AUTHOR_NAME} <{AUTHOR_EMAIL}> {timestamp}"
+    """Format Snapshot's static identity + a timestamp the way Git formats one: 'Name <email> timestamp tz'."""
+    return f"{AUTHOR_NAME} <{AUTHOR_EMAIL}> {timestamp} {TIMEZONE}"
 
 
 def build_commit(
